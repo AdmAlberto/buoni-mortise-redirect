@@ -352,6 +352,143 @@
       color: #686868;
     }
 
+
+    .privacy-link {
+      color: #bf571f;
+      font-weight: 700;
+      text-decoration: underline;
+      cursor: pointer;
+    }
+
+    .privacy-modal {
+      position: fixed;
+      inset: 0;
+      z-index: 100000;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 18px;
+      background: rgba(0, 0, 0, .58);
+    }
+
+    .privacy-modal.active {
+      display: flex;
+    }
+
+    .privacy-dialog {
+      width: min(860px, 100%);
+      max-height: min(90vh, 900px);
+      display: flex;
+      flex-direction: column;
+      background: #fff;
+      border-radius: 18px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, .28);
+      overflow: hidden;
+    }
+
+    .privacy-dialog-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 18px;
+      padding: 20px 22px 16px;
+      border-bottom: 1px solid #e7e1d9;
+    }
+
+    .privacy-dialog-header h2 {
+      margin: 0;
+      font-size: 24px;
+      line-height: 1.2;
+    }
+
+    .privacy-dialog-intro {
+      margin: 7px 0 0;
+      color: #686868;
+      font-size: 14px;
+      line-height: 1.45;
+    }
+
+    .privacy-close-x {
+      flex: 0 0 auto;
+      width: 40px;
+      height: 40px;
+      border: 0;
+      border-radius: 50%;
+      background: #f3f0eb;
+      color: #333;
+      font-size: 26px;
+      line-height: 1;
+      cursor: pointer;
+    }
+
+    .privacy-dialog-body {
+      padding: 4px 22px 20px;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      line-height: 1.55;
+    }
+
+    .privacy-dialog-body h3 {
+      margin: 24px 0 7px;
+      font-size: 18px;
+      line-height: 1.3;
+    }
+
+    .privacy-dialog-body p {
+      margin: 7px 0 11px;
+    }
+
+    .privacy-dialog-body ul {
+      margin: 7px 0 12px;
+      padding-left: 22px;
+    }
+
+    .privacy-dialog-body li {
+      margin: 5px 0;
+    }
+
+    .privacy-dialog-body a {
+      color: #bf571f;
+    }
+
+    .privacy-notice {
+      margin: 16px 0;
+      padding: 14px 15px;
+      border-left: 4px solid #ef8b2c;
+      border-radius: 8px;
+      background: #faf8f4;
+    }
+
+    .privacy-meta {
+      margin-top: 26px;
+      padding-top: 14px;
+      border-top: 1px solid #e7e1d9;
+      color: #777;
+      font-size: 13px;
+    }
+
+    .privacy-dialog-footer {
+      padding: 14px 22px 18px;
+      border-top: 1px solid #e7e1d9;
+      background: #fff;
+    }
+
+    .privacy-close-button {
+      width: 100%;
+      min-height: 46px;
+      border: 0;
+      border-radius: 11px;
+      background: #2f2f2f;
+      color: #fff;
+      font-size: 15px;
+      font-weight: 800;
+      cursor: pointer;
+    }
+
+    body.privacy-open {
+      overflow: hidden;
+    }
+
     @media (max-width: 720px) {
       .products,
       .grid2,
@@ -362,6 +499,32 @@
 
       .product-usage {
         min-height: 0;
+      }
+
+      .privacy-modal {
+        padding: 8px;
+        align-items: flex-end;
+      }
+
+      .privacy-dialog {
+        max-height: 94vh;
+        border-radius: 16px 16px 10px 10px;
+      }
+
+      .privacy-dialog-header {
+        padding: 17px 16px 13px;
+      }
+
+      .privacy-dialog-header h2 {
+        font-size: 21px;
+      }
+
+      .privacy-dialog-body {
+        padding: 4px 16px 18px;
+      }
+
+      .privacy-dialog-footer {
+        padding: 12px 16px 14px;
       }
     }
   </style>
@@ -423,10 +586,9 @@
           <span>
             Ho letto
             <a
-              href="https://script.google.com/a/angolidimondo.it/macros/s/AKfycbwTfDV731mJJQMSIJbMHLwcxmzjOFTo5LJu1IBjstelHy3tkI4R98XbzqplQXgJeGSI/exec?page=privacy"
-              target="_blank"
-              rel="noopener"
-              onclick="event.stopPropagation();"
+              href="#privacy"
+              class="privacy-link"
+              onclick="openPrivacyModal(event);"
             >
               l'informativa sul trattamento dei dati personali
             </a>.
@@ -491,6 +653,231 @@
     </div>
   </div>
 
+
+  <div
+    id="privacyModal"
+    class="privacy-modal"
+    aria-hidden="true"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="privacyTitle"
+    onclick="privacyBackdropClick(event)"
+  >
+    <div class="privacy-dialog">
+      <div class="privacy-dialog-header">
+        <div>
+          <h2 id="privacyTitle">
+            Informativa sul trattamento dei dati personali
+          </h2>
+          <p class="privacy-dialog-intro">
+            Informativa specifica per l'acquisto, l'emissione e l'utilizzo
+            dei Buoni Mortise, ai sensi del Regolamento (UE) 2016/679 ("GDPR").
+          </p>
+        </div>
+
+        <button
+          id="privacyCloseX"
+          type="button"
+          class="privacy-close-x"
+          aria-label="Chiudi informativa privacy"
+          onclick="closePrivacyModal()"
+        >
+          ×
+        </button>
+      </div>
+
+      <div class="privacy-dialog-body">
+        <div class="privacy-notice">
+          Questa informativa riguarda il servizio Buoni Mortise e integra
+          l'informativa generale pubblicata sul sito di Angoli di Mondo.
+        </div>
+
+        <h3>1. Titolare del trattamento</h3>
+        <p>
+          Il titolare del trattamento è
+          <strong>Angoli di Mondo Società Cooperativa Sociale</strong>,
+          C.F. e P. IVA 03353580289, con sede legale in
+          Riviera Tito Livio 46, 35123 Padova (PD).
+        </p>
+        <p>
+          Per richieste relative alla protezione dei dati personali:
+          <a href="mailto:info@angolidimondo.it">info@angolidimondo.it</a>.
+        </p>
+
+        <h3>2. Quali dati trattiamo</h3>
+        <p>Nell'ambito dei Buoni Mortise possono essere trattati:</p>
+        <ul>
+          <li>nome e cognome;</li>
+          <li>indirizzo e-mail;</li>
+          <li>numero di telefono, se fornito;</li>
+          <li>dati dell'ordine e dei buoni acquistati, emessi, utilizzati, sostituiti o annullati;</li>
+          <li>dati tecnici e riferimenti necessari a verificare lo stato del pagamento;</li>
+          <li>eventuale consenso facoltativo alle comunicazioni informative o promozionali.</li>
+        </ul>
+        <p>
+          Angoli di Mondo non memorizza nel proprio gestionale il numero completo
+          della carta, il codice di sicurezza della carta o le credenziali personali
+          utilizzate nei servizi di pagamento.
+        </p>
+
+        <h3>3. Perché trattiamo i dati</h3>
+        <p>I dati sono utilizzati per:</p>
+        <ul>
+          <li>creare e gestire l'ordine;</li>
+          <li>verificare l'esito del pagamento;</li>
+          <li>emettere e inviare i buoni digitali;</li>
+          <li>consentire l'attivazione, l'utilizzo, il controllo del residuo e l'eventuale sostituzione dei buoni;</li>
+          <li>gestire assistenza, anomalie, storni e contestazioni;</li>
+          <li>rispettare gli obblighi amministrativi, contabili, fiscali e di legge;</li>
+          <li>inviare comunicazioni ulteriori soltanto quando è stato espresso lo specifico consenso facoltativo.</li>
+        </ul>
+
+        <h3>4. Base giuridica</h3>
+        <p>
+          I trattamenti necessari all'acquisto e alla gestione dei Buoni Mortise
+          sono effettuati perché necessari all'esecuzione del rapporto richiesto
+          dall'interessato e all'adempimento degli obblighi di legge applicabili.
+        </p>
+        <p>
+          Le eventuali comunicazioni informative o promozionali non necessarie
+          alla gestione del buono sono invece basate sul consenso dell'interessato,
+          che può essere revocato in qualsiasi momento.
+        </p>
+
+        <h3>5. Conferimento dei dati</h3>
+        <p>
+          Nome, cognome ed e-mail sono necessari per l'acquisto e la gestione
+          del buono digitale. Il numero di telefono è facoltativo.
+        </p>
+        <p>
+          La presa visione della presente informativa è richiesta prima di completare
+          l'ordine. Il consenso marketing è facoltativo e il suo mancato rilascio
+          non impedisce l'acquisto dei buoni.
+        </p>
+
+        <h3>6. Pagamenti con SumUp e Satispay</h3>
+        <p>
+          Quando viene scelto un metodo di pagamento esterno, alcune informazioni
+          necessarie alla transazione sono trattate anche dal relativo prestatore
+          del servizio di pagamento.
+        </p>
+        <p>
+          Per i pagamenti con carta viene utilizzato <strong>SumUp</strong>.
+          Per i pagamenti Satispay viene utilizzato <strong>Satispay</strong>.
+          Tali soggetti trattano i dati connessi al servizio di pagamento secondo
+          le proprie informative e secondo il ruolo privacy ad essi applicabile.
+        </p>
+        <p>
+          Informazioni dei fornitori:
+          <a
+            href="https://help.sumup.com/it-IT/articles/2MrnASQDdzJMkFMUnK7BFL-gdpr-protezione-dati"
+            target="_blank"
+            rel="noopener"
+          >privacy e GDPR SumUp</a>
+          ·
+          <a
+            href="https://www.satispay.com/it-it/legal-hub/privacy/generale/"
+            target="_blank"
+            rel="noopener"
+          >informativa privacy Satispay</a>.
+        </p>
+
+        <h3>7. Servizi tecnologici utilizzati</h3>
+        <p>
+          Per il funzionamento del servizio Angoli di Mondo utilizza strumenti
+          informatici e servizi cloud, tra cui Google Workspace e Google Apps Script
+          per la gestione degli ordini, l'archiviazione dei dati e l'invio delle
+          comunicazioni e dei buoni digitali, e Vercel per la pubblicazione
+          dell'interfaccia web e l'instradamento tecnico delle richieste verso
+          il sistema gestionale.
+        </p>
+        <p>
+          L'accesso ai dati è limitato al personale autorizzato e ai fornitori
+          che possono trattarli nei limiti necessari all'erogazione dei rispettivi servizi.
+        </p>
+
+        <h3>8. Conservazione</h3>
+        <p>
+          I dati vengono conservati per il tempo necessario alla gestione dell'ordine,
+          del pagamento e del ciclo di vita dei buoni e, successivamente, per i periodi
+          richiesti dagli obblighi amministrativi, contabili, fiscali o da altre disposizioni di legge.
+        </p>
+        <p>
+          I dati trattati esclusivamente per comunicazioni basate sul consenso
+          sono conservati fino alla revoca del consenso o fino a quando non risultino
+          più necessari per tale finalità.
+        </p>
+
+        <h3>9. Destinatari dei dati</h3>
+        <p>
+          I dati possono essere trattati da dipendenti e collaboratori autorizzati
+          di Angoli di Mondo e, quando necessario, dai fornitori tecnici e di pagamento
+          coinvolti nel servizio.
+        </p>
+        <p>
+          I dati non sono diffusi. Possono essere comunicati a soggetti pubblici
+          o autorità nei casi previsti dalla legge.
+        </p>
+
+        <h3>10. Trasferimenti di dati</h3>
+        <p>
+          Alcuni fornitori tecnologici possono utilizzare infrastrutture o soggetti
+          situati anche al di fuori dell'Italia. Quando il trattamento comporta
+          trasferimenti di dati personali fuori dallo Spazio Economico Europeo,
+          tali trasferimenti devono avvenire secondo le garanzie previste dal GDPR.
+        </p>
+
+        <h3>11. Diritti dell'interessato</h3>
+        <p>
+          Nei casi previsti dagli articoli 15 e seguenti del GDPR, l'interessato
+          può chiedere l'accesso ai propri dati, la rettifica, la cancellazione,
+          la limitazione del trattamento, la portabilità dei dati oppure opporsi al trattamento.
+        </p>
+        <p>
+          Quando il trattamento è basato sul consenso, il consenso può essere
+          revocato in qualsiasi momento senza pregiudicare la liceità del trattamento
+          effettuato prima della revoca.
+        </p>
+        <p>
+          Le richieste possono essere inviate a
+          <a href="mailto:info@angolidimondo.it">info@angolidimondo.it</a>.
+        </p>
+
+        <h3>12. Reclamo</h3>
+        <p>
+          L'interessato può proporre reclamo all'Autorità Garante per la protezione
+          dei dati personali qualora ritenga che il trattamento dei propri dati
+          avvenga in violazione della normativa applicabile.
+        </p>
+
+        <h3>13. Informativa generale del sito</h3>
+        <p>
+          Per le informazioni relative alla navigazione del sito, ai cookie e agli
+          altri servizi web di Angoli di Mondo è disponibile anche
+          <a
+            href="https://www.angolidimondo.it/privacy-cookie-policy/"
+            target="_blank"
+            rel="noopener"
+          >l'informativa generale Privacy &amp; Cookie Policy</a>.
+        </p>
+
+        <div class="privacy-meta">
+          Versione informativa: 1.1 · 10 ottobre 2026
+        </div>
+      </div>
+
+      <div class="privacy-dialog-footer">
+        <button
+          type="button"
+          class="privacy-close-button"
+          onclick="closePrivacyModal()"
+        >
+          Chiudi e torna ai buoni
+        </button>
+      </div>
+    </div>
+  </div>
+
   <div id="paymentProcessing" class="payment-processing" aria-live="polite" aria-busy="true">
     <div class="payment-processing-card">
       <div class="payment-spinner"></div>
@@ -514,6 +901,106 @@
     let satispayWindowMonitor = null;
     let checkoutLocked = false;
     let completedOrderId = '';
+
+    let privacyLastFocus = null;
+
+
+    function openPrivacyModal(event) {
+      if (event) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+
+      const modal =
+        document.getElementById('privacyModal');
+
+      const closeButton =
+        document.getElementById('privacyCloseX');
+
+      if (!modal) {
+        return;
+      }
+
+      privacyLastFocus =
+        document.activeElement;
+
+      modal.classList.add('active');
+      modal.setAttribute(
+        'aria-hidden',
+        'false'
+      );
+
+      document.body.classList.add(
+        'privacy-open'
+      );
+
+      window.setTimeout(function() {
+        if (closeButton) {
+          closeButton.focus();
+        }
+      }, 0);
+    }
+
+
+    function closePrivacyModal() {
+      const modal =
+        document.getElementById('privacyModal');
+
+      if (!modal) {
+        return;
+      }
+
+      modal.classList.remove('active');
+      modal.setAttribute(
+        'aria-hidden',
+        'true'
+      );
+
+      document.body.classList.remove(
+        'privacy-open'
+      );
+
+      if (
+        privacyLastFocus &&
+        typeof privacyLastFocus.focus === 'function'
+      ) {
+        privacyLastFocus.focus();
+      }
+
+      privacyLastFocus = null;
+    }
+
+
+    function privacyBackdropClick(event) {
+      if (
+        event &&
+        event.target &&
+        event.target.id === 'privacyModal'
+      ) {
+        closePrivacyModal();
+      }
+    }
+
+
+    document.addEventListener(
+      'keydown',
+      function(event) {
+        if (event.key !== 'Escape') {
+          return;
+        }
+
+        const modal =
+          document.getElementById('privacyModal');
+
+        if (
+          modal &&
+          modal.classList.contains('active')
+        ) {
+          closePrivacyModal();
+        }
+      }
+    );
+
 
     async function chiamaServer(azione, parametri = {}) {
       const response = await fetch('/api/server', {
