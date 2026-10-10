@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <title>Gestionale Buoni Mortise</title>
+</head>
+
+<body>
+<script>
+  const APPS_SCRIPT_URL =
+    'https://script.google.com/a/macros/angolidimondo.it/s/AKfycbwot3KQMBNZvmBCh89PunjEkroBl81rZkGPJKI5SYSvdGupZwla3dllLMMvR5KFIw/exec';
+
+  const params = new URLSearchParams(window.location.search);
+  const forcedUi = (params.get('ui') || '').trim().toLowerCase();
+
+  let ui;
+
+  if (forcedUi === 'mobile' || forcedUi === 'desktop') {
+    ui = forcedUi;
+  } else {
+    const ua = navigator.userAgent || '';
+
+    const mobileUa =
+      /Android|iPhone|iPod|Mobile|Windows Phone|Opera Mini|IEMobile/i.test(ua);
+
+    // Gli iPad recenti possono dichiararsi come Mac.
+    const iPadOs =
+      /Macintosh/i.test(ua) &&
+      navigator.maxTouchPoints > 1;
+
+    ui = (mobileUa || iPadOs)
+      ? 'mobile'
+      : 'desktop';
+  }
+
+  window.location.replace(
+    APPS_SCRIPT_URL + '?ui=' + encodeURIComponent(ui)
+  );
+</script>
+</body>
+</html>
