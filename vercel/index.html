@@ -1,9 +1,10 @@
 <!DOCTYPE html>
-<html>
+<html lang="it">
 <head>
-  <base target="_top">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="index,follow">
+  <title>Buoni Sostegno Mortise - Angoli di Mondo</title>
 
   <style>
     * { box-sizing: border-box; }
@@ -232,19 +233,14 @@
       overflow: visible;
     }
 
-    .sumup-panel.active { display: block; }
+    .sumup-panel.active {
+      display: block;
+    }
 
     .sumup-title {
       margin: 0 0 6px;
       font-size: 18px;
       font-weight: 800;
-    }
-
-    .sumup-note {
-      margin: 0 0 14px;
-      font-size: 13px;
-      color: #686868;
-      line-height: 1.45;
     }
 
     .sumup-cancel {
@@ -286,7 +282,7 @@
       align-items: center;
       justify-content: center;
       padding: 24px;
-      background: rgba(247, 245, 240, .97);
+      background: rgba(247,245,240,.97);
       box-sizing: border-box;
     }
 
@@ -300,7 +296,7 @@
       border-radius: 18px;
       background: #fff;
       text-align: center;
-      box-shadow: 0 12px 40px rgba(0, 0, 0, .10);
+      box-shadow: 0 12px 40px rgba(0,0,0,.10);
     }
 
     .payment-spinner {
@@ -427,7 +423,7 @@
           <span>
             Ho letto
             <a
-              href="<?!= appUrl ?>?page=privacy"
+              href="https://script.google.com/a/angolidimondo.it/macros/s/AKfycbwTfDV731mJJQMSIJbMHLwcxmzjOFTo5LJu1IBjstelHy3tkI4R98XbzqplQXgJeGSI/exec?page=privacy"
               target="_blank"
               rel="noopener"
               onclick="event.stopPropagation();"
@@ -467,11 +463,11 @@
         </div>
 
         <div class="pay-buttons">
-          <button id="cardButton" class="pay" onclick="startCheckout('SUMUP')">
+          <button id="cardButton" class="pay" type="button" onclick="startCheckout('SUMUP')">
             Paga con carta
           </button>
 
-          <button id="satispayButton" class="pay satispay" onclick="startCheckout('SATISPAY')">
+          <button id="satispayButton" class="pay satispay" type="button" onclick="startCheckout('SATISPAY')">
             Paga con Satispay
           </button>
         </div>
@@ -495,1203 +491,6 @@
     </div>
   </div>
 
-<script src="https://gateway.sumup.com/gateway/ecom/card/v2/sdk.js"></script>
-
-<script>
-  let bootstrap = null;
-  let quantities = {};
-  let sumUpCardInstance = null;
-  let currentSumUpOrderId = '';
-  let currentSatispayOrderId = '';
-  let satispayRedirectWindow = null;
-  let satispayWindowMonitor = null;
-  let checkoutLocked = false;
-  let completedOrderId = '';
-
-  document.addEventListener('DOMContentLoaded', function() {
-
-    google.script.run
-      .withSuccessHandler(initPublicApp)
-      .withFailureHandler(showBootstrapError)
-      .getPublicBootstrap();
-  });
-
-
-  function initPublicApp(data) {
-
-    bootstrap = data;
-
-    if (!data || data.success !== true) {
-      showBootstrapError({ message: 'Impossibile inizializzare il checkout.' });
-      return;
-    }
-
-    (data.products || []).forEach(function(product) {
-      quantities[product.code] = 0;
-    });
-
-    renderProducts();
-    renderVoucherRows();
-    updateSummary();
-
-    document.getElementById('loading').style.display = 'none';
-    document.getElementById('app').style.display = 'block';
-
-    /*
-     * Dopo un 3DS con redirect SumUp torniamo qui.
-     * google.script.url.getLocation legge i parametri dell'URL
-     * esterno della Web App anche dentro il sandbox Apps Script.
-     */
-    if (
-      google.script &&
-      google.script.url &&
-      typeof google.script.url.getLocation === 'function'
-    ) {
-      google.script.url.getLocation(function(location) {
-        const params =
-          location && location.parameter
-            ? location.parameter
-            : {};
-
-        const sumUpOrderId =
-          params.sumup_return
-            ? String(params.sumup_return)
-            : '';
-
-        const satispayOrderId =
-          params.satispay_return
-            ? String(params.satispay_return)
-            : '';
-
-        if (sumUpOrderId) {
-          currentSumUpOrderId = sumUpOrderId;
-          setPaymentButtonsDisabled(true);
-          showMessage(
-            'wait',
-            'Rientro da 3D Secure. Verifica del pagamento SumUp...'
-          );
-          verifySumUpOrder(sumUpOrderId);
-          return;
-        }
-
-        if (satispayOrderId) {
-          handleSatispayReturnWindow(
-            satispayOrderId
-          );
-          return;
-        }
-      });
-    }
-  }
-
-
-  function showBootstrapError(error) {
-
-    document.getElementById('loading').innerHTML =
-      '<div class="message error">' +
-      escapeHtml(error && error.message ? error.message : 'Errore caricamento.') +
-      '</div>';
-  }
-
-
-  function renderProducts() {
-
-    const container =
-      document.getElementById('products');
-
-    container.innerHTML =
-      (bootstrap.products || []).map(function(product) {
-
-        const usageText =
-          product.usage === 'SCALARE'
-            ? 'Utilizzabile in più acquisti fino a esaurimento.'
-            : 'Da utilizzare in un’unica spesa.';
-
-        return (
-          '<div class="product">' +
-            '<div class="product-price">€ ' + money(product.price) + '</div>' +
-            '<div class="product-value">Buono da € ' + money(product.value) + '</div>' +
-            '<div class="product-usage">' + escapeHtml(usageText) + '</div>' +
-            '<div class="qty">' +
-              '<button type="button" onclick="changeQty(\'' + escapeJs(product.code) + '\', -1)">−</button>' +
-              '<span id="qty_' + escapeHtml(product.code) + '">0</span>' +
-              '<button type="button" onclick="changeQty(\'' + escapeJs(product.code) + '\', 1)">+</button>' +
-            '</div>' +
-          '</div>'
-        );
-      }).join('');
-  }
-
-
-  function changeQty(code, delta) {
-
-    const current =
-      Number(quantities[code] || 0);
-
-    const totalBefore =
-      totalVoucherCount();
-
-    let next =
-      Math.max(0, current + delta);
-
-    if (delta > 0 && totalBefore >= 20) {
-      showMessage('error', 'Per un singolo ordine puoi inserire al massimo 20 buoni.');
-      return;
-    }
-
-    quantities[code] = next;
-
-    const qtyEl =
-      document.getElementById('qty_' + code);
-
-    if (qtyEl) {
-      qtyEl.textContent = String(next);
-    }
-
-    renderVoucherRows();
-    updateSummary();
-  }
-
-
-  function renderVoucherRows() {
-
-    const container =
-      document.getElementById('voucherList');
-
-    const previousRecipients =
-      collectRecipientValues();
-
-    const rows = [];
-    let absoluteIndex = 0;
-
-    (bootstrap.products || []).forEach(function(product) {
-
-      const qty =
-        Number(quantities[product.code] || 0);
-
-      for (let i = 0; i < qty; i++) {
-
-        const key =
-          product.code + '_' + i;
-
-        const oldValue =
-          previousRecipients[key] || '';
-
-        rows.push(
-          '<div class="voucher-row">' +
-            '<label>' +
-              'Buono ' + (absoluteIndex + 1) +
-              ' — paghi € ' + money(product.price) +
-              ', vale € ' + money(product.value) +
-            '</label>' +
-            '<input ' +
-              'type="text" ' +
-              'data-recipient-key="' + escapeHtml(key) + '" ' +
-              'data-product="' + escapeHtml(product.code) + '" ' +
-              'value="' + escapeHtmlAttribute(oldValue) + '" ' +
-              'placeholder="Se è un regalo: nome da stampare sul buono (facoltativo)">' +
-          '</div>'
-        );
-
-        absoluteIndex++;
-      }
-    });
-
-    container.innerHTML =
-      rows.length
-        ? rows.join('')
-        : '<div class="small">Seleziona almeno un buono.</div>';
-  }
-
-
-  function collectRecipientValues() {
-
-    const result = {};
-
-    document
-      .querySelectorAll('[data-recipient-key]')
-      .forEach(function(input) {
-        result[input.getAttribute('data-recipient-key')] = input.value || '';
-      });
-
-    return result;
-  }
-
-
-  function collectVouchers() {
-
-    return Array.from(
-      document.querySelectorAll('[data-product]')
-    ).map(function(input) {
-      return {
-        prodotto: input.getAttribute('data-product'),
-        destinatario_nome: String(input.value || '').trim()
-      };
-    });
-  }
-
-
-  function totalVoucherCount() {
-
-    return Object.keys(quantities)
-      .reduce(function(sum, code) {
-        return sum + Number(quantities[code] || 0);
-      }, 0);
-  }
-
-
-  function updateSummary() {
-
-    let count = 0;
-    let paid = 0;
-    let value = 0;
-
-    (bootstrap.products || []).forEach(function(product) {
-
-      const qty =
-        Number(quantities[product.code] || 0);
-
-      count += qty;
-      paid += qty * Number(product.price);
-      value += qty * Number(product.value);
-    });
-
-    document.getElementById('sumCount').textContent = String(count);
-    document.getElementById('sumPaid').textContent = '€ ' + money(paid);
-    document.getElementById('sumValue').textContent = '€ ' + money(value);
-  }
-
-
-  function startCheckout(provider) {
-    if (checkoutLocked) {
-      return;
-    }
-
-    clearMessage();
-    cancelSumUpWidget(false);
-
-    const buoni = collectVouchers();
-
-    if (!buoni.length) {
-      showMessage('error', 'Seleziona almeno un buono.');
-      return;
-    }
-
-    const customer = {
-      nome: valueOf('nome'),
-      cognome: valueOf('cognome'),
-      email: valueOf('email'),
-      telefono: valueOf('telefono'),
-      privacy_accettata: document.getElementById('privacy').checked,
-      marketing_consenso: document.getElementById('marketing').checked
-    };
-
-    if (!customer.nome || !customer.cognome || !customer.email) {
-      showMessage('error', 'Compila nome, cognome ed email.');
-      return;
-    }
-
-    if (!customer.privacy_accettata) {
-      showMessage('error', 'Devi confermare di aver letto l’informativa privacy.');
-      return;
-    }
-
-    /*
-     * Satispay usa un Web Redirect esterno.
-     * Apps Script gira dentro un iframe sandbox: dopo una chiamata asincrona
-     * google.script.run non possiamo più navigare window.top, perché è persa
-     * l'attivazione utente. Apriamo quindi ORA una nuova scheda, durante il
-     * click reale dell'utente, e la indirizzeremo a Satispay appena il backend
-     * ci restituisce la redirect_url.
-     */
-    if (provider === 'SATISPAY') {
-      closeSatispayRedirectWindow();
-
-      satispayRedirectWindow =
-        window.open('about:blank', '_blank');
-
-      if (!satispayRedirectWindow) {
-        showMessage(
-          'error',
-          'Il browser ha bloccato l’apertura di Satispay. Consenti i popup per questa pagina e riprova.'
-        );
-        return;
-      }
-
-      try {
-        satispayRedirectWindow.document.title =
-          'Satispay - preparazione pagamento';
-
-        satispayRedirectWindow.document.body.innerHTML =
-          '<div style="font-family:Arial,sans-serif;padding:32px">' +
-          '<h2>Preparazione pagamento Satispay…</h2>' +
-          '<p>Attendi qualche secondo.</p>' +
-          '</div>';
-      } catch (error) {
-        // Non blocchiamo il pagamento se il contenuto provvisorio non è scrivibile.
-      }
-    }
-
-    setPaymentButtonsDisabled(true);
-    showMessage('wait', 'Creazione dell’ordine...');
-
-    google.script.run
-      .withSuccessHandler(function(order) {
-        if (!order || order.success !== true) {
-          closeSatispayRedirectWindow();
-          setPaymentButtonsDisabled(false);
-          showMessage('error', 'Impossibile creare l’ordine.');
-          return;
-        }
-
-        if (provider === 'SUMUP') {
-          startSumUpPayment(order);
-          return;
-        }
-
-        if (provider === 'SATISPAY') {
-          startSatispayPayment(order);
-          return;
-        }
-
-        closeSatispayRedirectWindow();
-        setPaymentButtonsDisabled(false);
-        showMessage(
-          'error',
-          'Metodo di pagamento non valido.'
-        );
-      })
-      .withFailureHandler(function(error) {
-        closeSatispayRedirectWindow();
-        setPaymentButtonsDisabled(false);
-        showMessage('error',
-          error && error.message ? error.message :
-          'Errore durante la creazione dell’ordine.'
-        );
-      })
-      .createPublicOrder({ customer: customer, buoni: buoni });
-  }
-
-
-  function startSatispayPayment(order) {
-    const orderId =
-      String(order && order.ordine_id ? order.ordine_id : '');
-
-    currentSatispayOrderId = orderId;
-
-    if (!orderId) {
-      currentSatispayOrderId = '';
-      closeSatispayRedirectWindow();
-      setPaymentButtonsDisabled(false);
-      showMessage('error', 'ID ordine Satispay mancante.');
-      return;
-    }
-
-    showMessage(
-      'wait',
-      'Ordine ' + escapeHtml(orderId) +
-      ' creato. Preparazione del pagamento Satispay...'
-    );
-
-    google.script.run
-      .withSuccessHandler(function(payment) {
-        if (
-          !payment ||
-          payment.success !== true ||
-          !payment.redirect_url
-        ) {
-          closeSatispayRedirectWindow();
-          setPaymentButtonsDisabled(false);
-          showMessage(
-            'error',
-            'Impossibile creare il pagamento Satispay.'
-          );
-          return;
-        }
-
-        showMessage(
-          'wait',
-          'Pagamento Satispay pronto. Apertura della pagina sicura Satispay...'
-        );
-
-        /*
-         * Non navighiamo window.top: l'HtmlService di Apps Script è sandboxed
-         * e, a questo punto asincrono, Chrome non considera più attivo il click
-         * originale. Usiamo invece la scheda aperta sincronicamente nel click.
-         */
-        if (
-          !satispayRedirectWindow ||
-          satispayRedirectWindow.closed
-        ) {
-          setPaymentButtonsDisabled(false);
-          showMessage(
-            'error',
-            'La scheda Satispay è stata chiusa. Premi di nuovo “Paga con Satispay”.'
-          );
-          return;
-        }
-
-        try {
-          satispayRedirectWindow.location.replace(
-            String(payment.redirect_url)
-          );
-
-          startSatispayWindowMonitor(
-            orderId
-          );
-        } catch (error) {
-          try {
-            satispayRedirectWindow.location.href =
-              String(payment.redirect_url);
-
-            startSatispayWindowMonitor(
-              orderId
-            );
-          } catch (navigationError) {
-            closeSatispayRedirectWindow();
-            setPaymentButtonsDisabled(false);
-            showMessage(
-              'error',
-              'Impossibile aprire la pagina Satispay. Riprova consentendo i popup.'
-            );
-          }
-        }
-      })
-      .withFailureHandler(function(error) {
-        closeSatispayRedirectWindow();
-        setPaymentButtonsDisabled(false);
-        showMessage(
-          'error',
-          error && error.message
-            ? error.message
-            : 'Errore durante la creazione del pagamento Satispay.'
-        );
-      })
-      .createSatispayPayment(orderId);
-  }
-
-
-  function stopSatispayWindowMonitor() {
-    if (!satispayWindowMonitor) {
-      return;
-    }
-
-    window.clearInterval(
-      satispayWindowMonitor
-    );
-
-    satispayWindowMonitor = null;
-  }
-
-
-  function startSatispayWindowMonitor(orderId) {
-    stopSatispayWindowMonitor();
-
-    currentSatispayOrderId =
-      String(orderId || '').trim();
-
-    satispayWindowMonitor =
-      window.setInterval(function() {
-        if (
-          satispayRedirectWindow &&
-          !satispayRedirectWindow.closed
-        ) {
-          return;
-        }
-
-        stopSatispayWindowMonitor();
-
-        satispayRedirectWindow = null;
-
-        const id =
-          String(
-            currentSatispayOrderId || ''
-          ).trim();
-
-        if (!id) {
-          setPaymentButtonsDisabled(false);
-          return;
-        }
-
-        /*
-         * Satispay è stato chiuso oppure ha concluso il redirect.
-         * Restiamo nella pagina originale e verifichiamo sempre
-         * lo stato vero lato server.
-         */
-        showMessage(
-          'wait',
-          'Verifica del pagamento Satispay...'
-        );
-
-        verifySatispayOrder(
-          id,
-          0
-        );
-      }, 500);
-  }
-
-
-  function handleSatispayReturnWindow(orderId) {
-    /*
-     * La scheda Satispay è stata aperta da window.open().
-     * Al ritorno alla Web App NON deve trasformarsi in un secondo
-     * checkout: deve semplicemente chiudersi.
-     *
-     * Non controlliamo window.top.opener:
-     * alcuni redirect/provider possono azzerarlo per sicurezza
-     * anche se la scheda resta comunque "script-opened" e quindi
-     * chiudibile con window.close()/window.top.close().
-     *
-     * La pagina originale sta già monitorando la scheda:
-     * appena la vede chiusa verifica il pagamento server-side.
-     */
-    showMessage(
-      'wait',
-      'Pagamento concluso. Ritorno alla pagina precedente...'
-    );
-
-    window.setTimeout(function() {
-      try {
-        if (window.top) {
-          window.top.close();
-        }
-      } catch (topCloseError) {
-        // Proviamo anche sul contesto corrente.
-      }
-
-      try {
-        window.close();
-      } catch (closeError) {
-        // Fallback sotto.
-      }
-    }, 120);
-
-    /*
-     * Se il browser impedisce comunque la chiusura automatica,
-     * non lasciamo l'utente bloccato: dopo un attimo verifichiamo
-     * il pagamento anche in questa pagina.
-     */
-    window.setTimeout(function() {
-      setPaymentButtonsDisabled(true);
-      showPaymentProcessing(
-        'SATISPAY'
-      );
-      showMessage(
-        'wait',
-        'Verifica del pagamento Satispay...'
-      );
-      verifySatispayOrder(
-        orderId,
-        0
-      );
-    }, 1200);
-  }
-
-
-  function closeSatispayRedirectWindow() {
-    stopSatispayWindowMonitor();
-
-    if (
-      satispayRedirectWindow &&
-      !satispayRedirectWindow.closed
-    ) {
-      try {
-        satispayRedirectWindow.close();
-      } catch (error) {
-        // Nessuna azione necessaria.
-      }
-    }
-
-    satispayRedirectWindow = null;
-    currentSatispayOrderId = '';
-  }
-
-
-  function verifySatispayOrder(orderId, attempt) {
-    const tries = Number(attempt || 0);
-
-    google.script.run
-      .withSuccessHandler(function(result) {
-        if (result && result.success === true && result.paid === true) {
-          hidePaymentProcessing();
-          stopSatispayWindowMonitor();
-          satispayRedirectWindow = null;
-          currentSatispayOrderId = '';
-
-          lockCompletedCheckout(result);
-          renderSatispayPaymentConfirmed(result);
-
-          google.script.run
-            .withSuccessHandler(function(delivery) {
-              updateSatispayDeliveryMessage(delivery);
-            })
-            .withFailureHandler(function(error) {
-              /*
-               * Il pagamento è già confermato.
-               * Il reconciler Satispay recupera emissione/consegna.
-               */
-            })
-            .completePaidSatispayOrder(result.ordine_id);
-
-          return;
-        }
-
-        const providerStatus =
-          result && result.provider_status
-            ? String(result.provider_status).toUpperCase()
-            : '';
-
-        if (providerStatus === 'PENDING' && tries < 10) {
-          showMessage(
-            'wait',
-            'Pagamento Satispay non ancora confermato. Sto verificando l’esito...'
-          );
-
-          window.setTimeout(function() {
-            verifySatispayOrder(orderId, tries + 1);
-          }, 2000);
-
-          return;
-        }
-
-        hidePaymentProcessing();
-        stopSatispayWindowMonitor();
-        satispayRedirectWindow = null;
-        currentSatispayOrderId = '';
-        setPaymentButtonsDisabled(false);
-
-        if (providerStatus === 'PENDING') {
-          showMessage(
-            'wait',
-            'Pagamento Satispay non completato o non ancora confermato. ' +
-            'Se hai annullato puoi riprovare. ' +
-            'Se invece hai completato il pagamento, il sistema continuerà a verificarlo automaticamente.'
-          );
-
-          return;
-        }
-
-        showMessage(
-          'error',
-          result && result.message
-            ? result.message
-            : 'Pagamento Satispay non completato. Puoi riprovare.'
-        );
-      })
-      .withFailureHandler(function(error) {
-        hidePaymentProcessing();
-        stopSatispayWindowMonitor();
-        satispayRedirectWindow = null;
-        currentSatispayOrderId = '';
-        setPaymentButtonsDisabled(false);
-
-        showMessage(
-          'error',
-          error && error.message
-            ? error.message
-            : 'Errore durante la verifica server-side del pagamento Satispay.'
-        );
-      })
-      .verifySatispayPayment(orderId);
-  }
-
-
-  function renderSatispayPaymentConfirmed(result) {
-    const html =
-      '<strong>Pagamento Satispay ricevuto.</strong><br>' +
-      'Ordine: ' + escapeHtml(result.ordine_id) + '<br>' +
-      'Pagamento: € ' + money(result.importo_pagato) + '<br>' +
-      'Valore dei buoni: € ' + money(result.valore_buoni) + '<br><br>' +
-      '<strong>Ordine confermato.</strong> ' +
-      'Stiamo preparando i tuoi buoni: PDF e email vengono generati automaticamente.' +
-      '<br><br>Puoi chiudere questa pagina senza perdere l’ordine.' +
-      '<br><button type="button" class="new-order-button" ' +
-      'onclick="startNewOrder()">Fai un nuovo ordine</button>';
-
-    showMessage('ok', html, true);
-  }
-
-
-  function updateSatispayDeliveryMessage(delivery) {
-    if (!delivery || delivery.success !== true) {
-      return;
-    }
-
-    const box = document.getElementById('message');
-    if (!box) {
-      return;
-    }
-
-    const recipient =
-      delivery.email_recipient
-        ? escapeHtml(delivery.email_recipient)
-        : '';
-
-    const note =
-      '<div style="margin-top:12px">' +
-      '<strong>Buoni preparati.</strong> ' +
-      (delivery.email_sent === true
-        ? 'Email inviata' + (recipient ? ' a ' + recipient : '') + '.'
-        : 'La consegna email è in completamento.') +
-      '</div>';
-
-    if (box.innerHTML.indexOf('Buoni preparati.') === -1) {
-      box.innerHTML += note;
-    }
-  }
-
-
-  function startSumUpPayment(order) {
-    currentSumUpOrderId = String(order.ordine_id || '');
-
-    showMessage(
-      'wait',
-      'Ordine ' + escapeHtml(currentSumUpOrderId) +
-      ' creato. Preparazione del pagamento SumUp...'
-    );
-
-    google.script.run
-      .withSuccessHandler(function(checkout) {
-        if (!checkout || checkout.success !== true || !checkout.checkout_id) {
-          currentSumUpOrderId = '';
-          setPaymentButtonsDisabled(false);
-          showMessage('error', 'Impossibile creare il checkout SumUp.');
-          return;
-        }
-
-        mountSumUpWidget(checkout.checkout_id, currentSumUpOrderId, order);
-      })
-      .withFailureHandler(function(error) {
-        currentSumUpOrderId = '';
-        setPaymentButtonsDisabled(false);
-        showMessage('error',
-          error && error.message ? error.message :
-          'Errore durante la creazione del checkout SumUp.'
-        );
-      })
-      .createSumUpCheckout(currentSumUpOrderId);
-  }
-
-
-  function mountSumUpWidget(checkoutId, orderId, order) {
-    if (
-      typeof SumUpCard === 'undefined' ||
-      !SumUpCard ||
-      typeof SumUpCard.mount !== 'function'
-    ) {
-      currentSumUpOrderId = '';
-      setPaymentButtonsDisabled(false);
-      showMessage('error',
-        'Il modulo di pagamento SumUp non è stato caricato. Ricarica la pagina e riprova.'
-      );
-      return;
-    }
-
-    document.getElementById('sumupPanel').classList.add('active');
-
-    showMessage(
-      'wait',
-      'Checkout SumUp pronto per l’ordine ' +
-      escapeHtml(orderId) + '. Inserisci i dati della carta.'
-    );
-
-    try {
-      sumUpCardInstance = SumUpCard.mount({
-        id: 'sumup-card',
-        checkoutId: checkoutId,
-        email: valueOf('email'),
-        amount: String(order.importo_da_pagare),
-        currency: 'EUR',
-        locale: 'it-IT',
-        country: 'IT',
-
-        onResponse: function(type, body) {
-          if (type === 'sent') {
-            showMessage('wait', 'Pagamento inviato a SumUp...');
-            return;
-          }
-
-          if (type === 'auth-screen') {
-            showMessage('wait', 'Autenticazione del pagamento in corso...');
-            return;
-          }
-
-          if (type === 'invalid') {
-            showMessage('error', 'Controlla i dati della carta e riprova.');
-            return;
-          }
-
-          if (type === 'error' || type === 'fail') {
-            setPaymentButtonsDisabled(false);
-            showMessage(
-              'error',
-              sumUpClientErrorMessage(body) ||
-              'Il pagamento SumUp non è stato completato.'
-            );
-            return;
-          }
-
-          if (type === 'success') {
-            // Il browser non è prova del pagamento: verifica sempre server-side.
-            showPaymentProcessing('SUMUP');
-            verifySumUpOrder(orderId);
-          }
-        }
-      });
-    }
-    catch (error) {
-      currentSumUpOrderId = '';
-      setPaymentButtonsDisabled(false);
-      document.getElementById('sumupPanel').classList.remove('active');
-      showMessage('error',
-        error && error.message ? error.message :
-        'Impossibile inizializzare il modulo SumUp.'
-      );
-    }
-  }
-
-
-  function showPaymentProcessing(provider) {
-    const overlay = document.getElementById('paymentProcessing');
-    const text = document.getElementById('paymentProcessingText');
-
-    const normalizedProvider =
-      String(provider || 'SUMUP').trim().toUpperCase();
-
-    if (text) {
-      text.innerHTML =
-        normalizedProvider === 'SATISPAY'
-          ? 'Stiamo verificando il pagamento con Satispay.<br>Non chiudere o ricaricare questa pagina.'
-          : 'Stiamo verificando il pagamento con SumUp.<br>Non chiudere o ricaricare questa pagina.';
-    }
-
-    if (overlay) {
-      overlay.classList.add('active');
-    }
-  }
-
-
-  function hidePaymentProcessing() {
-    const overlay = document.getElementById('paymentProcessing');
-    if (overlay) {
-      overlay.classList.remove('active');
-    }
-  }
-
-
-  function verifySumUpOrder(orderId) {
-    showMessage('wait', 'Pagamento ricevuto. Verifica server-side con SumUp...');
-
-    google.script.run
-      .withSuccessHandler(function(result) {
-        if (!result || result.success !== true || result.paid !== true) {
-          hidePaymentProcessing();
-          setPaymentButtonsDisabled(false);
-          showMessage(
-            'error',
-            result && result.message ?
-              result.message :
-              'SumUp non ha ancora confermato il pagamento.'
-          );
-          return;
-        }
-
-        if (sumUpCardInstance && typeof sumUpCardInstance.unmount === 'function') {
-          try { sumUpCardInstance.unmount(); } catch (error) {}
-        }
-
-        sumUpCardInstance = null;
-        currentSumUpOrderId = '';
-        hidePaymentProcessing();
-
-        /*
-         * Da questo momento l'ordine è economicamente concluso:
-         * nessun secondo click può creare un nuovo pagamento involontario.
-         */
-        lockCompletedCheckout(result);
-        renderSumUpPaymentConfirmed(result);
-
-        /*
-         * La conferma economica è già visibile.
-         * Ora avviamo emissione + PDF + email con una seconda chiamata.
-         * Se questa chiamata viene interrotta, il reconciler recupera l'ordine.
-         */
-        google.script.run
-          .withSuccessHandler(function(delivery) {
-            updateSumUpDeliveryMessage(delivery);
-          })
-          .withFailureHandler(function(error) {
-            /*
-             * Non mostriamo un falso errore di pagamento:
-             * il pagamento è già confermato e il reconciler recupererà.
-             */
-          })
-          .completePaidSumUpOrder(result.ordine_id);
-      })
-      .withFailureHandler(function(error) {
-        hidePaymentProcessing();
-        setPaymentButtonsDisabled(false);
-        showMessage('error',
-          error && error.message ? error.message :
-          'Errore durante la verifica server-side del pagamento SumUp.'
-        );
-      })
-      .verifySumUpPayment(orderId);
-  }
-
-
-  function cancelSumUpWidget(showCancellationMessage) {
-    if (sumUpCardInstance && typeof sumUpCardInstance.unmount === 'function') {
-      try { sumUpCardInstance.unmount(); } catch (error) {}
-    }
-
-    sumUpCardInstance = null;
-    currentSumUpOrderId = '';
-
-    const panel = document.getElementById('sumupPanel');
-    if (panel) panel.classList.remove('active');
-
-    setPaymentButtonsDisabled(false);
-
-    if (showCancellationMessage !== false) {
-      showMessage(
-        'wait',
-        'Pagamento con carta annullato. Nessun buono è stato emesso.'
-      );
-    }
-  }
-
-
-  function sumUpClientErrorMessage(body) {
-    if (!body) return '';
-    if (typeof body === 'string') return body;
-
-    return String(
-      body.message ||
-      body.error_message ||
-      body.error ||
-      ''
-    );
-  }
-
-
-  function renderCheckoutSuccess(result) {
-    const codes =
-      (result.buoni || [])
-        .map(function(voucher) {
-          return voucher.codice_visibile;
-        })
-        .join(', ');
-
-    let html =
-      '<strong>Ordine completato.</strong><br>' +
-      'Ordine: ' + escapeHtml(result.ordine_id) + '<br>' +
-      'Buoni: ' + escapeHtml(codes) + '<br>' +
-      'Pagamento: € ' + money(result.importo_pagato) + '<br>' +
-      'Valore dei buoni: € ' + money(result.valore_buoni) + '<br>';
-
-    if (result.delivery_success === true) {
-      html +=
-        'PDF creati: ' + Number((result.pdfs || []).length) + '<br>' +
-        'Email inviata a ' + escapeHtml(result.email_recipient || '') + '.';
-    }
-    else {
-      html +=
-        '<br><strong>I buoni sono stati emessi, ma la consegna automatica non è completa.</strong>';
-
-      if (result.delivery_error) {
-        html += '<br>' + escapeHtml(result.delivery_error);
-      }
-    }
-
-    lockCompletedCheckout(result);
-
-    html +=
-      '<br><button type="button" class="new-order-button" ' +
-      'onclick="startNewOrder()">Fai un nuovo ordine</button>';
-
-    showMessage('ok', html, true);
-  }
-
-
-  function renderSumUpPaymentConfirmed(result) {
-    const html =
-      '<strong>Pagamento ricevuto.</strong><br>' +
-      'Ordine: ' + escapeHtml(result.ordine_id) + '<br>' +
-      'Pagamento: € ' + money(result.importo_pagato) + '<br>' +
-      'Valore dei buoni: € ' + money(result.valore_buoni) + '<br><br>' +
-      '<strong>Ordine confermato.</strong> ' +
-      'Stiamo preparando i tuoi buoni: PDF e email vengono generati automaticamente.' +
-      '<br><br>Puoi chiudere questa pagina senza perdere l’ordine.' +
-      '<br><button type="button" class="new-order-button" ' +
-      'onclick="startNewOrder()">Fai un nuovo ordine</button>';
-
-    showMessage('ok', html, true);
-  }
-
-
-  function updateSumUpDeliveryMessage(delivery) {
-    if (!delivery || delivery.success !== true) {
-      return;
-    }
-
-    const box = document.getElementById('message');
-    if (!box) {
-      return;
-    }
-
-    const recipient =
-      delivery.email_recipient
-        ? escapeHtml(delivery.email_recipient)
-        : '';
-
-    const note =
-      '<div style="margin-top:12px">' +
-      '<strong>Buoni preparati.</strong> ' +
-      (delivery.email_sent === true
-        ? 'Email inviata' + (recipient ? ' a ' + recipient : '') + '.'
-        : 'La consegna email è in completamento.') +
-      '</div>';
-
-    if (box.innerHTML.indexOf('Buoni preparati.') === -1) {
-      box.innerHTML += note;
-    }
-  }
-
-
-  function lockCompletedCheckout(result) {
-    checkoutLocked = true;
-    completedOrderId =
-      String(result && result.ordine_id ? result.ordine_id : '');
-
-    const app =
-      document.getElementById('app');
-
-    if (app) {
-      app.classList.add('checkout-locked');
-    }
-
-    setPaymentButtonsDisabled(true);
-    clearCheckoutFields();
-  }
-
-
-  function clearCheckoutFields() {
-    Object.keys(quantities).forEach(function(code) {
-      quantities[code] = 0;
-
-      const qtyEl =
-        document.getElementById('qty_' + code);
-
-      if (qtyEl) {
-        qtyEl.textContent = '0';
-      }
-    });
-
-    ['nome', 'cognome', 'email', 'telefono'].forEach(function(id) {
-      const el = document.getElementById(id);
-      if (el) el.value = '';
-    });
-
-    const privacy = document.getElementById('privacy');
-    const marketing = document.getElementById('marketing');
-
-    if (privacy) privacy.checked = false;
-    if (marketing) marketing.checked = false;
-
-    renderVoucherRows();
-    updateSummary();
-  }
-
-
-  function startNewOrder() {
-    hidePaymentProcessing();
-    checkoutLocked = false;
-    completedOrderId = '';
-    currentSumUpOrderId = '';
-    currentSatispayOrderId = '';
-    stopSatispayWindowMonitor();
-
-    const app =
-      document.getElementById('app');
-
-    if (app) {
-      app.classList.remove('checkout-locked');
-    }
-
-    cancelSumUpWidget(false);
-    clearCheckoutFields();
-    clearMessage();
-    setPaymentButtonsDisabled(false);
-
-    window.scrollTo({
-      top: 0,
-      behavior: 'smooth'
-    });
-  }
-
-
-  function setPaymentButtonsDisabled(disabled) {
-    document.getElementById('cardButton').disabled = disabled;
-    document.getElementById('satispayButton').disabled = disabled;
-  }
-
-
-  function valueOf(id) {
-    return String(document.getElementById(id).value || '').trim();
-  }
-
-
-  function showMessage(type, text, isHtml) {
-
-    const el =
-      document.getElementById('message');
-
-    el.innerHTML =
-      '<div class="message ' + type + '">' +
-      (isHtml ? text : escapeHtml(text)) +
-      '</div>';
-  }
-
-
-  function clearMessage() {
-    document.getElementById('message').innerHTML = '';
-  }
-
-
-  function money(value) {
-
-    const number =
-      Number(value || 0);
-
-    return Number.isInteger(number)
-      ? String(number)
-      : number.toFixed(2).replace('.', ',');
-  }
-
-
-  function escapeHtml(value) {
-
-    return String(value == null ? '' : value)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#39;');
-  }
-
-
-  function escapeHtmlAttribute(value) {
-    return escapeHtml(value);
-  }
-
-
-  function escapeJs(value) {
-    return String(value || '')
-      .replace(/\\/g, '\\\\')
-      .replace(/'/g, "\\'");
-  }
-</script>
   <div id="paymentProcessing" class="payment-processing" aria-live="polite" aria-busy="true">
     <div class="payment-processing-card">
       <div class="payment-spinner"></div>
@@ -1703,5 +502,1441 @@
     </div>
   </div>
 
+  <script src="https://gateway.sumup.com/gateway/ecom/card/v2/sdk.js"></script>
+
+  <script>
+    let bootstrap = null;
+    let quantities = {};
+    let sumUpCardInstance = null;
+    let currentSumUpOrderId = '';
+    let currentSatispayOrderId = '';
+    let satispayRedirectWindow = null;
+    let satispayWindowMonitor = null;
+    let checkoutLocked = false;
+    let completedOrderId = '';
+
+    async function chiamaServer(azione, parametri = {}) {
+      const response = await fetch('/api/server', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          action: azione,
+          params: parametri
+        })
+      });
+
+      let payload;
+
+      try {
+        payload = await response.json();
+      }
+      catch (error) {
+        throw new Error('Il server ha restituito una risposta non valida.');
+      }
+
+      if (!response.ok) {
+        throw new Error(
+          payload && payload.error
+            ? payload.error
+            : 'Errore di comunicazione con il server.'
+        );
+      }
+
+      if (!payload || payload.success !== true) {
+        throw new Error(
+          payload && payload.error
+            ? payload.error
+            : 'Operazione non riuscita.'
+        );
+      }
+
+      return payload.data;
+    }
+
+
+    document.addEventListener('DOMContentLoaded', async function() {
+      try {
+        const data = await chiamaServer('getPublicBootstrap');
+        initPublicApp(data);
+      }
+      catch (error) {
+        showBootstrapError(error);
+      }
+    });
+
+
+    function initPublicApp(data) {
+      bootstrap = data;
+
+      if (!data || data.success !== true) {
+        showBootstrapError({
+          message: 'Impossibile inizializzare il checkout.'
+        });
+        return;
+      }
+
+      (data.products || []).forEach(function(product) {
+        quantities[product.code] = 0;
+      });
+
+      renderProducts();
+      renderVoucherRows();
+      updateSummary();
+
+      document.getElementById('loading').style.display = 'none';
+      document.getElementById('app').style.display = 'block';
+
+      handleReturnParameters();
+    }
+
+
+    function handleReturnParameters() {
+      const params = new URLSearchParams(window.location.search);
+
+      const sumUpOrderId =
+        String(params.get('sumup_return') || '').trim();
+
+      const satispayOrderId =
+        String(params.get('satispay_return') || '').trim();
+
+      if (sumUpOrderId) {
+        currentSumUpOrderId = sumUpOrderId;
+        setPaymentButtonsDisabled(true);
+
+        showMessage(
+          'wait',
+          'Rientro da 3D Secure. Verifica del pagamento SumUp...'
+        );
+
+        verifySumUpOrder(sumUpOrderId);
+        return;
+      }
+
+      if (satispayOrderId) {
+        handleSatispayReturnWindow(satispayOrderId);
+      }
+    }
+
+
+    function showBootstrapError(error) {
+      document.getElementById('loading').innerHTML =
+        '<div class="message error">' +
+        escapeHtml(
+          error && error.message
+            ? error.message
+            : 'Errore caricamento.'
+        ) +
+        '</div>';
+    }
+
+
+    function renderProducts() {
+      const container =
+        document.getElementById('products');
+
+      container.innerHTML =
+        (bootstrap.products || []).map(function(product) {
+          const usageText =
+            product.usage === 'SCALARE'
+              ? 'Utilizzabile in più acquisti fino a esaurimento.'
+              : 'Da utilizzare in un’unica spesa.';
+
+          return (
+            '<div class="product">' +
+              '<div class="product-price">€ ' + money(product.price) + '</div>' +
+              '<div class="product-value">Buono da € ' + money(product.value) + '</div>' +
+              '<div class="product-usage">' + escapeHtml(usageText) + '</div>' +
+              '<div class="qty">' +
+                '<button type="button" onclick="changeQty(\'' +
+                  escapeJs(product.code) +
+                  '\', -1)">−</button>' +
+                '<span id="qty_' + escapeHtml(product.code) + '">0</span>' +
+                '<button type="button" onclick="changeQty(\'' +
+                  escapeJs(product.code) +
+                  '\', 1)">+</button>' +
+              '</div>' +
+            '</div>'
+          );
+        }).join('');
+    }
+
+
+    function changeQty(code, delta) {
+      const current =
+        Number(quantities[code] || 0);
+
+      const totalBefore =
+        totalVoucherCount();
+
+      const next =
+        Math.max(0, current + delta);
+
+      if (delta > 0 && totalBefore >= 20) {
+        showMessage(
+          'error',
+          'Per un singolo ordine puoi inserire al massimo 20 buoni.'
+        );
+        return;
+      }
+
+      quantities[code] = next;
+
+      const qtyEl =
+        document.getElementById('qty_' + code);
+
+      if (qtyEl) {
+        qtyEl.textContent = String(next);
+      }
+
+      renderVoucherRows();
+      updateSummary();
+    }
+
+
+    function renderVoucherRows() {
+      const container =
+        document.getElementById('voucherList');
+
+      const previousRecipients =
+        collectRecipientValues();
+
+      const rows = [];
+      let absoluteIndex = 0;
+
+      (bootstrap.products || []).forEach(function(product) {
+        const qty =
+          Number(quantities[product.code] || 0);
+
+        for (let i = 0; i < qty; i++) {
+          const key =
+            product.code + '_' + i;
+
+          const oldValue =
+            previousRecipients[key] || '';
+
+          rows.push(
+            '<div class="voucher-row">' +
+              '<label>' +
+                'Buono ' + (absoluteIndex + 1) +
+                ' — paghi € ' + money(product.price) +
+                ', vale € ' + money(product.value) +
+              '</label>' +
+              '<input ' +
+                'type="text" ' +
+                'data-recipient-key="' + escapeHtml(key) + '" ' +
+                'data-product="' + escapeHtml(product.code) + '" ' +
+                'value="' + escapeHtmlAttribute(oldValue) + '" ' +
+                'placeholder="Se è un regalo: nome da stampare sul buono (facoltativo)">' +
+            '</div>'
+          );
+
+          absoluteIndex++;
+        }
+      });
+
+      container.innerHTML =
+        rows.length
+          ? rows.join('')
+          : '<div class="small">Seleziona almeno un buono.</div>';
+    }
+
+
+    function collectRecipientValues() {
+      const result = {};
+
+      document
+        .querySelectorAll('[data-recipient-key]')
+        .forEach(function(input) {
+          result[input.getAttribute('data-recipient-key')] =
+            input.value || '';
+        });
+
+      return result;
+    }
+
+
+    function collectVouchers() {
+      return Array.from(
+        document.querySelectorAll('[data-product]')
+      ).map(function(input) {
+        return {
+          prodotto: input.getAttribute('data-product'),
+          destinatario_nome: String(input.value || '').trim()
+        };
+      });
+    }
+
+
+    function totalVoucherCount() {
+      return Object.keys(quantities)
+        .reduce(function(sum, code) {
+          return sum + Number(quantities[code] || 0);
+        }, 0);
+    }
+
+
+    function updateSummary() {
+      let count = 0;
+      let paid = 0;
+      let value = 0;
+
+      (bootstrap.products || []).forEach(function(product) {
+        const qty =
+          Number(quantities[product.code] || 0);
+
+        count += qty;
+        paid += qty * Number(product.price);
+        value += qty * Number(product.value);
+      });
+
+      document.getElementById('sumCount').textContent =
+        String(count);
+
+      document.getElementById('sumPaid').textContent =
+        '€ ' + money(paid);
+
+      document.getElementById('sumValue').textContent =
+        '€ ' + money(value);
+    }
+
+
+    async function startCheckout(provider) {
+      if (checkoutLocked) {
+        return;
+      }
+
+      clearMessage();
+      cancelSumUpWidget(false);
+
+      const buoni =
+        collectVouchers();
+
+      if (!buoni.length) {
+        showMessage(
+          'error',
+          'Seleziona almeno un buono.'
+        );
+        return;
+      }
+
+      const customer = {
+        nome: valueOf('nome'),
+        cognome: valueOf('cognome'),
+        email: valueOf('email'),
+        telefono: valueOf('telefono'),
+        privacy_accettata:
+          document.getElementById('privacy').checked,
+        marketing_consenso:
+          document.getElementById('marketing').checked
+      };
+
+      if (
+        !customer.nome ||
+        !customer.cognome ||
+        !customer.email
+      ) {
+        showMessage(
+          'error',
+          'Compila nome, cognome ed email.'
+        );
+        return;
+      }
+
+      if (!customer.privacy_accettata) {
+        showMessage(
+          'error',
+          'Devi confermare di aver letto l’informativa privacy.'
+        );
+        return;
+      }
+
+      if (provider === 'SATISPAY') {
+        closeSatispayRedirectWindow();
+
+        satispayRedirectWindow =
+          window.open('about:blank', '_blank');
+
+        if (!satispayRedirectWindow) {
+          showMessage(
+            'error',
+            'Il browser ha bloccato l’apertura di Satispay. Consenti i popup per questa pagina e riprova.'
+          );
+          return;
+        }
+
+        try {
+          satispayRedirectWindow.document.title =
+            'Satispay - preparazione pagamento';
+
+          satispayRedirectWindow.document.body.innerHTML =
+            '<div style="font-family:Arial,sans-serif;padding:32px">' +
+            '<h2>Preparazione pagamento Satispay…</h2>' +
+            '<p>Attendi qualche secondo.</p>' +
+            '</div>';
+        }
+        catch (error) {
+          // Non blocchiamo il pagamento.
+        }
+      }
+
+      setPaymentButtonsDisabled(true);
+      showMessage('wait', 'Creazione dell’ordine...');
+
+      try {
+        const order =
+          await chiamaServer(
+            'createPublicOrder',
+            {
+              customer: customer,
+              buoni: buoni
+            }
+          );
+
+        if (!order || order.success !== true) {
+          throw new Error(
+            'Impossibile creare l’ordine.'
+          );
+        }
+
+        if (provider === 'SUMUP') {
+          await startSumUpPayment(order);
+          return;
+        }
+
+        if (provider === 'SATISPAY') {
+          await startSatispayPayment(order);
+          return;
+        }
+
+        throw new Error(
+          'Metodo di pagamento non valido.'
+        );
+      }
+      catch (error) {
+        closeSatispayRedirectWindow();
+        setPaymentButtonsDisabled(false);
+
+        showMessage(
+          'error',
+          error && error.message
+            ? error.message
+            : 'Errore durante la creazione dell’ordine.'
+        );
+      }
+    }
+
+
+    async function startSatispayPayment(order) {
+      const orderId =
+        String(
+          order && order.ordine_id
+            ? order.ordine_id
+            : ''
+        ).trim();
+
+      currentSatispayOrderId =
+        orderId;
+
+      if (!orderId) {
+        currentSatispayOrderId = '';
+        closeSatispayRedirectWindow();
+        setPaymentButtonsDisabled(false);
+
+        showMessage(
+          'error',
+          'ID ordine Satispay mancante.'
+        );
+
+        return;
+      }
+
+      showMessage(
+        'wait',
+        'Ordine ' +
+        escapeHtml(orderId) +
+        ' creato. Preparazione del pagamento Satispay...'
+      );
+
+      try {
+        const payment =
+          await chiamaServer(
+            'createSatispayPayment',
+            {
+              orderId: orderId
+            }
+          );
+
+        if (
+          !payment ||
+          payment.success !== true ||
+          !payment.redirect_url
+        ) {
+          throw new Error(
+            'Impossibile creare il pagamento Satispay.'
+          );
+        }
+
+        showMessage(
+          'wait',
+          'Pagamento Satispay pronto. Apertura della pagina sicura Satispay...'
+        );
+
+        if (
+          !satispayRedirectWindow ||
+          satispayRedirectWindow.closed
+        ) {
+          setPaymentButtonsDisabled(false);
+
+          showMessage(
+            'error',
+            'La scheda Satispay è stata chiusa. Premi di nuovo “Paga con Satispay”.'
+          );
+
+          return;
+        }
+
+        try {
+          satispayRedirectWindow.location.replace(
+            String(payment.redirect_url)
+          );
+        }
+        catch (error) {
+          satispayRedirectWindow.location.href =
+            String(payment.redirect_url);
+        }
+
+        startSatispayWindowMonitor(
+          orderId
+        );
+      }
+      catch (error) {
+        closeSatispayRedirectWindow();
+        setPaymentButtonsDisabled(false);
+
+        showMessage(
+          'error',
+          error && error.message
+            ? error.message
+            : 'Errore durante la creazione del pagamento Satispay.'
+        );
+      }
+    }
+
+
+    function stopSatispayWindowMonitor() {
+      if (!satispayWindowMonitor) {
+        return;
+      }
+
+      window.clearInterval(
+        satispayWindowMonitor
+      );
+
+      satispayWindowMonitor = null;
+    }
+
+
+    function startSatispayWindowMonitor(orderId) {
+      stopSatispayWindowMonitor();
+
+      currentSatispayOrderId =
+        String(orderId || '').trim();
+
+      satispayWindowMonitor =
+        window.setInterval(function() {
+          if (
+            satispayRedirectWindow &&
+            !satispayRedirectWindow.closed
+          ) {
+            return;
+          }
+
+          stopSatispayWindowMonitor();
+
+          satispayRedirectWindow = null;
+
+          const id =
+            String(
+              currentSatispayOrderId || ''
+            ).trim();
+
+          if (!id) {
+            setPaymentButtonsDisabled(false);
+            return;
+          }
+
+          showMessage(
+            'wait',
+            'Verifica del pagamento Satispay...'
+          );
+
+          verifySatispayOrder(
+            id,
+            0
+          );
+        }, 500);
+    }
+
+
+    function handleSatispayReturnWindow(orderId) {
+      showMessage(
+        'wait',
+        'Pagamento concluso. Ritorno alla pagina precedente...'
+      );
+
+      window.setTimeout(function() {
+        try {
+          window.close();
+        }
+        catch (error) {
+          // Fallback sotto.
+        }
+      }, 120);
+
+      window.setTimeout(function() {
+        setPaymentButtonsDisabled(true);
+        showPaymentProcessing('SATISPAY');
+
+        showMessage(
+          'wait',
+          'Verifica del pagamento Satispay...'
+        );
+
+        verifySatispayOrder(
+          orderId,
+          0
+        );
+      }, 1200);
+    }
+
+
+    function closeSatispayRedirectWindow() {
+      stopSatispayWindowMonitor();
+
+      if (
+        satispayRedirectWindow &&
+        !satispayRedirectWindow.closed
+      ) {
+        try {
+          satispayRedirectWindow.close();
+        }
+        catch (error) {
+          // Nessuna azione necessaria.
+        }
+      }
+
+      satispayRedirectWindow = null;
+      currentSatispayOrderId = '';
+    }
+
+
+    async function verifySatispayOrder(orderId, attempt) {
+      const tries =
+        Number(attempt || 0);
+
+      try {
+        const result =
+          await chiamaServer(
+            'verifySatispayPayment',
+            {
+              orderId: orderId
+            }
+          );
+
+        if (
+          result &&
+          result.success === true &&
+          result.paid === true
+        ) {
+          hidePaymentProcessing();
+          stopSatispayWindowMonitor();
+
+          satispayRedirectWindow = null;
+          currentSatispayOrderId = '';
+
+          lockCompletedCheckout(result);
+          renderSatispayPaymentConfirmed(result);
+
+          completePaidSatispayOrderInBackground(
+            result.ordine_id
+          );
+
+          return;
+        }
+
+        const providerStatus =
+          result && result.provider_status
+            ? String(result.provider_status).toUpperCase()
+            : '';
+
+        if (
+          providerStatus === 'PENDING' &&
+          tries < 10
+        ) {
+          showMessage(
+            'wait',
+            'Pagamento Satispay non ancora confermato. Sto verificando l’esito...'
+          );
+
+          window.setTimeout(function() {
+            verifySatispayOrder(
+              orderId,
+              tries + 1
+            );
+          }, 2000);
+
+          return;
+        }
+
+        hidePaymentProcessing();
+        stopSatispayWindowMonitor();
+
+        satispayRedirectWindow = null;
+        currentSatispayOrderId = '';
+
+        setPaymentButtonsDisabled(false);
+
+        if (providerStatus === 'PENDING') {
+          showMessage(
+            'wait',
+            'Pagamento Satispay non completato o non ancora confermato. ' +
+            'Se hai annullato puoi riprovare. ' +
+            'Se invece hai completato il pagamento, il sistema continuerà a verificarlo automaticamente.'
+          );
+          return;
+        }
+
+        showMessage(
+          'error',
+          result && result.message
+            ? result.message
+            : 'Pagamento Satispay non completato. Puoi riprovare.'
+        );
+      }
+      catch (error) {
+        hidePaymentProcessing();
+        stopSatispayWindowMonitor();
+
+        satispayRedirectWindow = null;
+        currentSatispayOrderId = '';
+
+        setPaymentButtonsDisabled(false);
+
+        showMessage(
+          'error',
+          error && error.message
+            ? error.message
+            : 'Errore durante la verifica server-side del pagamento Satispay.'
+        );
+      }
+    }
+
+
+    async function completePaidSatispayOrderInBackground(orderId) {
+      try {
+        const delivery =
+          await chiamaServer(
+            'completePaidSatispayOrder',
+            {
+              orderId: orderId
+            }
+          );
+
+        updateSatispayDeliveryMessage(
+          delivery
+        );
+      }
+      catch (error) {
+        /*
+         * Il pagamento è già confermato.
+         * Il reconciler Satispay recupera emissione/consegna.
+         */
+      }
+    }
+
+
+    function renderSatispayPaymentConfirmed(result) {
+      const html =
+        '<strong>Pagamento Satispay ricevuto.</strong><br>' +
+        'Ordine: ' + escapeHtml(result.ordine_id) + '<br>' +
+        'Pagamento: € ' + money(result.importo_pagato) + '<br>' +
+        'Valore dei buoni: € ' + money(result.valore_buoni) + '<br><br>' +
+        '<strong>Ordine confermato.</strong> ' +
+        'Stiamo preparando i tuoi buoni: PDF e email vengono generati automaticamente.' +
+        '<br><br>Puoi chiudere questa pagina senza perdere l’ordine.' +
+        '<br><button type="button" class="new-order-button" ' +
+        'onclick="startNewOrder()">Fai un nuovo ordine</button>';
+
+      showMessage(
+        'ok',
+        html,
+        true
+      );
+    }
+
+
+    function updateSatispayDeliveryMessage(delivery) {
+      if (
+        !delivery ||
+        delivery.success !== true
+      ) {
+        return;
+      }
+
+      const box =
+        document.getElementById('message');
+
+      if (!box) {
+        return;
+      }
+
+      const recipient =
+        delivery.email_recipient
+          ? escapeHtml(delivery.email_recipient)
+          : '';
+
+      const note =
+        '<div style="margin-top:12px">' +
+        '<strong>Buoni preparati.</strong> ' +
+        (
+          delivery.email_sent === true
+            ? 'Email inviata' +
+              (recipient ? ' a ' + recipient : '') +
+              '.'
+            : 'La consegna email è in completamento.'
+        ) +
+        '</div>';
+
+      if (
+        box.innerHTML.indexOf(
+          'Buoni preparati.'
+        ) === -1
+      ) {
+        box.innerHTML += note;
+      }
+    }
+
+
+    async function startSumUpPayment(order) {
+      currentSumUpOrderId =
+        String(
+          order && order.ordine_id
+            ? order.ordine_id
+            : ''
+        ).trim();
+
+      if (!currentSumUpOrderId) {
+        setPaymentButtonsDisabled(false);
+
+        showMessage(
+          'error',
+          'ID ordine SumUp mancante.'
+        );
+
+        return;
+      }
+
+      showMessage(
+        'wait',
+        'Ordine ' +
+        escapeHtml(currentSumUpOrderId) +
+        ' creato. Preparazione del pagamento SumUp...'
+      );
+
+      try {
+        const checkout =
+          await chiamaServer(
+            'createSumUpCheckout',
+            {
+              orderId: currentSumUpOrderId
+            }
+          );
+
+        if (
+          !checkout ||
+          checkout.success !== true ||
+          !checkout.checkout_id
+        ) {
+          throw new Error(
+            'Impossibile creare il checkout SumUp.'
+          );
+        }
+
+        mountSumUpWidget(
+          checkout.checkout_id,
+          currentSumUpOrderId,
+          order
+        );
+      }
+      catch (error) {
+        currentSumUpOrderId = '';
+        setPaymentButtonsDisabled(false);
+
+        showMessage(
+          'error',
+          error && error.message
+            ? error.message
+            : 'Errore durante la creazione del checkout SumUp.'
+        );
+      }
+    }
+
+
+    function mountSumUpWidget(checkoutId, orderId, order) {
+      if (
+        typeof SumUpCard === 'undefined' ||
+        !SumUpCard ||
+        typeof SumUpCard.mount !== 'function'
+      ) {
+        currentSumUpOrderId = '';
+        setPaymentButtonsDisabled(false);
+
+        showMessage(
+          'error',
+          'Il modulo di pagamento SumUp non è stato caricato. Ricarica la pagina e riprova.'
+        );
+
+        return;
+      }
+
+      document
+        .getElementById('sumupPanel')
+        .classList.add('active');
+
+      showMessage(
+        'wait',
+        'Checkout SumUp pronto per l’ordine ' +
+        escapeHtml(orderId) +
+        '. Inserisci i dati della carta.'
+      );
+
+      try {
+        sumUpCardInstance =
+          SumUpCard.mount({
+            id: 'sumup-card',
+            checkoutId: checkoutId,
+            email: valueOf('email'),
+            amount: String(order.importo_da_pagare),
+            currency: 'EUR',
+            locale: 'it-IT',
+            country: 'IT',
+
+            onResponse: function(type, body) {
+              if (type === 'sent') {
+                showMessage(
+                  'wait',
+                  'Pagamento inviato a SumUp...'
+                );
+                return;
+              }
+
+              if (type === 'auth-screen') {
+                showMessage(
+                  'wait',
+                  'Autenticazione del pagamento in corso...'
+                );
+                return;
+              }
+
+              if (type === 'invalid') {
+                showMessage(
+                  'error',
+                  'Controlla i dati della carta e riprova.'
+                );
+                return;
+              }
+
+              if (
+                type === 'error' ||
+                type === 'fail'
+              ) {
+                setPaymentButtonsDisabled(false);
+
+                showMessage(
+                  'error',
+                  sumUpClientErrorMessage(body) ||
+                  'Il pagamento SumUp non è stato completato.'
+                );
+
+                return;
+              }
+
+              if (type === 'success') {
+                showPaymentProcessing('SUMUP');
+                verifySumUpOrder(orderId);
+              }
+            }
+          });
+      }
+      catch (error) {
+        currentSumUpOrderId = '';
+        setPaymentButtonsDisabled(false);
+
+        document
+          .getElementById('sumupPanel')
+          .classList.remove('active');
+
+        showMessage(
+          'error',
+          error && error.message
+            ? error.message
+            : 'Impossibile inizializzare il modulo SumUp.'
+        );
+      }
+    }
+
+
+    function showPaymentProcessing(provider) {
+      const overlay =
+        document.getElementById('paymentProcessing');
+
+      const text =
+        document.getElementById('paymentProcessingText');
+
+      const normalizedProvider =
+        String(
+          provider || 'SUMUP'
+        ).trim().toUpperCase();
+
+      if (text) {
+        text.innerHTML =
+          normalizedProvider === 'SATISPAY'
+            ? 'Stiamo verificando il pagamento con Satispay.<br>Non chiudere o ricaricare questa pagina.'
+            : 'Stiamo verificando il pagamento con SumUp.<br>Non chiudere o ricaricare questa pagina.';
+      }
+
+      if (overlay) {
+        overlay.classList.add('active');
+      }
+    }
+
+
+    function hidePaymentProcessing() {
+      const overlay =
+        document.getElementById('paymentProcessing');
+
+      if (overlay) {
+        overlay.classList.remove('active');
+      }
+    }
+
+
+    async function verifySumUpOrder(orderId) {
+      showMessage(
+        'wait',
+        'Pagamento ricevuto. Verifica server-side con SumUp...'
+      );
+
+      try {
+        const result =
+          await chiamaServer(
+            'verifySumUpPayment',
+            {
+              orderId: orderId
+            }
+          );
+
+        if (
+          !result ||
+          result.success !== true ||
+          result.paid !== true
+        ) {
+          hidePaymentProcessing();
+          setPaymentButtonsDisabled(false);
+
+          showMessage(
+            'error',
+            result && result.message
+              ? result.message
+              : 'SumUp non ha ancora confermato il pagamento.'
+          );
+
+          return;
+        }
+
+        if (
+          sumUpCardInstance &&
+          typeof sumUpCardInstance.unmount === 'function'
+        ) {
+          try {
+            sumUpCardInstance.unmount();
+          }
+          catch (error) {
+            // Nessuna azione necessaria.
+          }
+        }
+
+        sumUpCardInstance = null;
+        currentSumUpOrderId = '';
+
+        hidePaymentProcessing();
+
+        lockCompletedCheckout(result);
+        renderSumUpPaymentConfirmed(result);
+
+        completePaidSumUpOrderInBackground(
+          result.ordine_id
+        );
+      }
+      catch (error) {
+        hidePaymentProcessing();
+        setPaymentButtonsDisabled(false);
+
+        showMessage(
+          'error',
+          error && error.message
+            ? error.message
+            : 'Errore durante la verifica server-side del pagamento SumUp.'
+        );
+      }
+    }
+
+
+    async function completePaidSumUpOrderInBackground(orderId) {
+      try {
+        const delivery =
+          await chiamaServer(
+            'completePaidSumUpOrder',
+            {
+              orderId: orderId
+            }
+          );
+
+        updateSumUpDeliveryMessage(
+          delivery
+        );
+      }
+      catch (error) {
+        /*
+         * Il pagamento è già confermato.
+         * Il reconciler recupera emissione/consegna.
+         */
+      }
+    }
+
+
+    function cancelSumUpWidget(showCancellationMessage) {
+      if (
+        sumUpCardInstance &&
+        typeof sumUpCardInstance.unmount === 'function'
+      ) {
+        try {
+          sumUpCardInstance.unmount();
+        }
+        catch (error) {
+          // Nessuna azione necessaria.
+        }
+      }
+
+      sumUpCardInstance = null;
+      currentSumUpOrderId = '';
+
+      const panel =
+        document.getElementById('sumupPanel');
+
+      if (panel) {
+        panel.classList.remove('active');
+      }
+
+      setPaymentButtonsDisabled(false);
+
+      if (showCancellationMessage !== false) {
+        showMessage(
+          'wait',
+          'Pagamento con carta annullato. Nessun buono è stato emesso.'
+        );
+      }
+    }
+
+
+    function sumUpClientErrorMessage(body) {
+      if (!body) {
+        return '';
+      }
+
+      if (typeof body === 'string') {
+        return body;
+      }
+
+      return String(
+        body.message ||
+        body.error_message ||
+        body.error ||
+        ''
+      );
+    }
+
+
+    function renderSumUpPaymentConfirmed(result) {
+      const html =
+        '<strong>Pagamento ricevuto.</strong><br>' +
+        'Ordine: ' + escapeHtml(result.ordine_id) + '<br>' +
+        'Pagamento: € ' + money(result.importo_pagato) + '<br>' +
+        'Valore dei buoni: € ' + money(result.valore_buoni) + '<br><br>' +
+        '<strong>Ordine confermato.</strong> ' +
+        'Stiamo preparando i tuoi buoni: PDF e email vengono generati automaticamente.' +
+        '<br><br>Puoi chiudere questa pagina senza perdere l’ordine.' +
+        '<br><button type="button" class="new-order-button" ' +
+        'onclick="startNewOrder()">Fai un nuovo ordine</button>';
+
+      showMessage(
+        'ok',
+        html,
+        true
+      );
+    }
+
+
+    function updateSumUpDeliveryMessage(delivery) {
+      if (
+        !delivery ||
+        delivery.success !== true
+      ) {
+        return;
+      }
+
+      const box =
+        document.getElementById('message');
+
+      if (!box) {
+        return;
+      }
+
+      const recipient =
+        delivery.email_recipient
+          ? escapeHtml(delivery.email_recipient)
+          : '';
+
+      const note =
+        '<div style="margin-top:12px">' +
+        '<strong>Buoni preparati.</strong> ' +
+        (
+          delivery.email_sent === true
+            ? 'Email inviata' +
+              (recipient ? ' a ' + recipient : '') +
+              '.'
+            : 'La consegna email è in completamento.'
+        ) +
+        '</div>';
+
+      if (
+        box.innerHTML.indexOf(
+          'Buoni preparati.'
+        ) === -1
+      ) {
+        box.innerHTML += note;
+      }
+    }
+
+
+    function lockCompletedCheckout(result) {
+      checkoutLocked = true;
+
+      completedOrderId =
+        String(
+          result && result.ordine_id
+            ? result.ordine_id
+            : ''
+        );
+
+      const app =
+        document.getElementById('app');
+
+      if (app) {
+        app.classList.add(
+          'checkout-locked'
+        );
+      }
+
+      setPaymentButtonsDisabled(true);
+      clearCheckoutFields();
+    }
+
+
+    function clearCheckoutFields() {
+      Object
+        .keys(quantities)
+        .forEach(function(code) {
+          quantities[code] = 0;
+
+          const qtyEl =
+            document.getElementById(
+              'qty_' + code
+            );
+
+          if (qtyEl) {
+            qtyEl.textContent = '0';
+          }
+        });
+
+      [
+        'nome',
+        'cognome',
+        'email',
+        'telefono'
+      ].forEach(function(id) {
+        const el =
+          document.getElementById(id);
+
+        if (el) {
+          el.value = '';
+        }
+      });
+
+      const privacy =
+        document.getElementById('privacy');
+
+      const marketing =
+        document.getElementById('marketing');
+
+      if (privacy) {
+        privacy.checked = false;
+      }
+
+      if (marketing) {
+        marketing.checked = false;
+      }
+
+      renderVoucherRows();
+      updateSummary();
+    }
+
+
+    function startNewOrder() {
+      hidePaymentProcessing();
+
+      checkoutLocked = false;
+      completedOrderId = '';
+      currentSumUpOrderId = '';
+      currentSatispayOrderId = '';
+
+      stopSatispayWindowMonitor();
+
+      const app =
+        document.getElementById('app');
+
+      if (app) {
+        app.classList.remove(
+          'checkout-locked'
+        );
+      }
+
+      cancelSumUpWidget(false);
+      clearCheckoutFields();
+      clearMessage();
+      setPaymentButtonsDisabled(false);
+
+      const cleanUrl =
+        window.location.origin +
+        window.location.pathname;
+
+      window.history.replaceState(
+        {},
+        document.title,
+        cleanUrl
+      );
+
+      window.scrollTo({
+        top: 0,
+        behavior: 'smooth'
+      });
+    }
+
+
+    function setPaymentButtonsDisabled(disabled) {
+      const cardButton =
+        document.getElementById('cardButton');
+
+      const satispayButton =
+        document.getElementById('satispayButton');
+
+      if (cardButton) {
+        cardButton.disabled = disabled;
+      }
+
+      if (satispayButton) {
+        satispayButton.disabled = disabled;
+      }
+    }
+
+
+    function valueOf(id) {
+      const element =
+        document.getElementById(id);
+
+      return String(
+        element && element.value
+          ? element.value
+          : ''
+      ).trim();
+    }
+
+
+    function showMessage(type, text, isHtml) {
+      const el =
+        document.getElementById('message');
+
+      if (!el) {
+        return;
+      }
+
+      el.innerHTML =
+        '<div class="message ' +
+        type +
+        '">' +
+        (isHtml ? text : escapeHtml(text)) +
+        '</div>';
+    }
+
+
+    function clearMessage() {
+      const el =
+        document.getElementById('message');
+
+      if (el) {
+        el.innerHTML = '';
+      }
+    }
+
+
+    function money(value) {
+      const number =
+        Number(value || 0);
+
+      return Number.isInteger(number)
+        ? String(number)
+        : number
+            .toFixed(2)
+            .replace('.', ',');
+    }
+
+
+    function escapeHtml(value) {
+      return String(
+        value == null
+          ? ''
+          : value
+      )
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+
+    function escapeHtmlAttribute(value) {
+      return escapeHtml(value);
+    }
+
+
+    function escapeJs(value) {
+      return String(value || '')
+        .replace(/\\/g, '\\\\')
+        .replace(/'/g, "\\'");
+    }
+  </script>
 </body>
 </html>
