@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="robots" content="noindex,nofollow">
   <title>Ritorno a Buoni Mortise</title>
+
   <style>
     html, body {
       margin: 0;
@@ -53,34 +54,6 @@
       animation: spin .8s linear infinite;
     }
 
-    button,
-    a.button {
-      display: none;
-      width: 100%;
-      margin-top: 14px;
-      min-height: 48px;
-      box-sizing: border-box;
-      border: 0;
-      border-radius: 10px;
-      background: #222;
-      color: #fff;
-      font-size: 16px;
-      font-weight: 700;
-      cursor: pointer;
-      text-decoration: none;
-      align-items: center;
-      justify-content: center;
-    }
-
-    body.fallback button,
-    body.fallback a.button {
-      display: flex;
-    }
-
-    body.fallback .spinner {
-      display: none;
-    }
-
     .order {
       margin-top: 14px;
       font-size: 12px;
@@ -88,31 +61,26 @@
     }
 
     @keyframes spin {
-      to { transform: rotate(360deg); }
+      to {
+        transform: rotate(360deg);
+      }
     }
   </style>
 </head>
+
 <body>
   <main class="card">
     <div class="spinner" aria-hidden="true"></div>
 
-    <h1>Ritorno ai Buoni Mortise…</h1>
+    <h1>Verifica del pagamento…</h1>
 
     <p>
-      La pagina dei Buoni Mortise sta verificando l'esito del pagamento Satispay.
+      Stiamo verificando l'esito del pagamento Satispay.
     </p>
 
     <p>
-      Questa scheda si chiuderà automaticamente.
+      Tra pochi istanti tornerai alla pagina dei Buoni Mortise.
     </p>
-
-    <button id="closeButton" type="button">
-      Chiudi questa scheda
-    </button>
-
-    <a id="fallbackLink" class="button" href="/">
-      Torna ai Buoni Mortise
-    </a>
 
     <div id="order" class="order"></div>
   </main>
@@ -129,80 +97,19 @@
           params.get('order') || ''
         ).trim();
 
-      if (order) {
-        document
-          .getElementById('order')
-          .textContent =
-            'Ordine ' + order;
-
-        document
-          .getElementById('fallbackLink')
-          .href =
-            '/?satispay_return=' +
-            encodeURIComponent(order);
-
-        const signal = {
-          orderId: order,
-          ts: Date.now()
-        };
-
-        try {
-          window.localStorage.setItem(
-            'buoniMortiseSatispayReturn',
-            JSON.stringify(signal)
-          );
-        }
-        catch (error) {
-          // Il postMessage resta disponibile.
-        }
-
-        try {
-          if (window.opener) {
-            window.opener.postMessage(
-              {
-                type:
-                  'BUONI_MORTISE_SATISPAY_RETURN',
-                orderId: order
-              },
-              window.location.origin
-            );
-
-            window.opener.focus();
-          }
-        }
-        catch (error) {
-          // Il fallback resta disponibile.
-        }
-      }
-
-      function closeReturnTab() {
-        try {
-          window.close();
-        }
-        catch (error) {
-          // Mostriamo il fallback sotto.
-        }
+      if (!order) {
+        window.location.replace('/');
+        return;
       }
 
       document
-        .getElementById('closeButton')
-        .addEventListener(
-          'click',
-          closeReturnTab
-        );
+        .getElementById('order')
+        .textContent =
+          'Ordine ' + order;
 
-      window.setTimeout(
-        closeReturnTab,
-        150
-      );
-
-      window.setTimeout(
-        function () {
-          document.body.classList.add(
-            'fallback'
-          );
-        },
-        1200
+      window.location.replace(
+        '/?satispay_return=' +
+        encodeURIComponent(order)
       );
     })();
   </script>
