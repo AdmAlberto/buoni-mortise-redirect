@@ -1,210 +1,186 @@
+
 <!doctype html>
 <html lang="it">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <meta name="robots" content="noindex,nofollow">
-  <title>Verifica pagamento - Buoni Mortise</title>
-  <style>
-    html, body {
-      margin: 0;
-      min-height: 100%;
-      font-family: Arial, Helvetica, sans-serif;
-      background: #f6f2ec;
-      color: #222;
-    }
-
-    body {
-      display: grid;
-      min-height: 100vh;
-      place-items: center;
-      padding: 24px;
-    }
-
-    .card {
-      width: min(520px, 100%);
-      box-sizing: border-box;
-      background: #fff;
-      border: 1px solid #e7e1d9;
-      border-radius: 18px;
-      padding: 30px 24px;
-      text-align: center;
-      box-shadow: 0 14px 36px rgba(0,0,0,.08);
-    }
-
-    h1 {
-      margin: 0 0 12px;
-      font-size: 25px;
-    }
-
-    p {
-      margin: 8px 0;
-      color: #666;
-      line-height: 1.45;
-    }
-
-    .spinner {
-      width: 38px;
-      height: 38px;
-      margin: 0 auto 22px;
-      border: 4px solid #e8e3dd;
-      border-top-color: #222;
-      border-radius: 50%;
-      animation: spin .8s linear infinite;
-    }
-
-    button,
-    a.button {
-      display: none;
-      width: 100%;
-      margin-top: 14px;
-      min-height: 48px;
-      box-sizing: border-box;
-      border: 0;
-      border-radius: 10px;
-      background: #222;
-      color: #fff;
-      font-size: 16px;
-      font-weight: 700;
-      cursor: pointer;
-      text-decoration: none;
-      align-items: center;
-      justify-content: center;
-    }
-
-    body.fallback button,
-    body.fallback a.button {
-      display: flex;
-    }
-
-    body.fallback .spinner {
-      display: none;
-    }
-
-    .order {
-      margin-top: 14px;
-      font-size: 12px;
-      color: #999;
-    }
-
-    @keyframes spin {
-      to { transform: rotate(360deg); }
-    }
-  </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<title>Esito pagamento - Buoni Mortise</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin:0; min-height:100vh; padding:20px; display:grid; place-items:center; font-family:Arial,Helvetica,sans-serif; background:#f6f4ef; color:#292929; }
+  main { width:min(520px,100%); background:white; padding:36px 28px; border:1px solid #e5e1db; border-radius:18px; text-align:center; box-shadow:0 12px 35px #0000000d; }
+  .brand { font-size:13px; color:#777; letter-spacing:1.3px; font-weight:bold; margin-bottom:24px; text-transform:uppercase; }
+  .symbol { margin:0 auto 20px; width:66px; height:66px; display:grid; place-items:center; border-radius:50%; font-size:34px; font-weight:bold; background:#f6eee4; color:#a76727; }
+  .symbol.success { background:#e9f4ec; color:#287542; }
+  .symbol.failed { background:#fbecec; color:#b33b3b; }
+  h1 { font-size:26px; margin:0 0 15px; line-height:1.2; }
+  p { font-size:16px; line-height:1.55; color:#4c4c4c; margin:0; }
+  .details { font-size:13px; color:#777; margin-top:18px; overflow-wrap:anywhere; }
+  .extra { font-size:14px; color:#666; margin-top:17px; }
+  .extra:empty { display:none; }
+  .actions { display:grid; gap:10px; margin-top:25px; }
+  .button { display:flex; align-items:center; justify-content:center; min-height:48px; padding:10px 15px; border-radius:10px; font-size:15px; font-weight:bold; text-decoration:none; cursor:pointer; }
+  .button.primary { border:1px solid #333; background:#333; color:white; }
+  .button.secondary { border:1px solid #ddd8d0; background:white; color:#333; }
+  [hidden] { display:none !important; }
+  .note { color:#777; font-size:13px; margin-top:20px; }
+  @media(max-width:480px) { body { padding:12px; } main { padding:28px 18px; } h1 { font-size:24px; } }
+</style>
 </head>
 <body>
-  <main class="card">
-    <div class="spinner" aria-hidden="true"></div>
+<main aria-live="polite" aria-atomic="true">
+  <div class="brand">Angoli di Mondo · Buoni Mortise</div>
+  <div id="symbol" class="symbol" aria-hidden="true">…</div>
+  <h1 id="title">Verifica del pagamento</h1>
+  <p id="message">Stiamo verificando l'esito del pagamento. Attendi qualche istante.</p>
+  <p id="details" class="details"></p>
+  <p id="extra" class="extra"></p>
+  <div class="actions">
+    <button id="retry" type="button" class="button primary" hidden>Verifica di nuovo</button>
+    <a class="button secondary" href="/">Torna ai Buoni Mortise</a>
+  </div>
+  <p id="note" class="note">Non effettuare un secondo pagamento mentre è in corso la verifica.</p>
+  <noscript>Per verificare il pagamento è necessario abilitare JavaScript.</noscript>
+</main>
+<script>
+'use strict';
+(function () {
+  const PROVIDER = 'SumUp';
+  const VERIFY_ACTION = 'verifySumUpPayment';
+  const COMPLETE_ACTION = 'completePaidSumUpOrder';
+  const MAX_ATTEMPTS = 12;
+  const DELAY_MS = 2500;
+  const TIMEOUT_MS = 25000;
 
-    <h1>Verifica del pagamento…</h1>
+  const params = new URLSearchParams(window.location.search);
+  const orderId = String(params.get('order') || '').trim();
+  const elements = {
+    symbol: document.getElementById('symbol'),
+    title: document.getElementById('title'),
+    message: document.getElementById('message'),
+    details: document.getElementById('details'),
+    extra: document.getElementById('extra'),
+    retry: document.getElementById('retry'),
+    note: document.getElementById('note')
+  };
+  let verifying = false;
+  let confirmed = false;
+  let deliveryStarted = false;
 
-    <p>
-      Il controllo del pagamento SumUp continua nella pagina dei Buoni Mortise.
-    </p>
+  function show(kind, title, message, extra, canRetry) {
+    elements.symbol.className = 'symbol ' + kind;
+    elements.symbol.textContent = kind === 'success' ? '✓' : kind === 'failed' ? '×' : '…';
+    elements.title.textContent = title;
+    elements.message.textContent = message;
+    elements.extra.textContent = extra || '';
+    elements.retry.hidden = !canRetry;
+    elements.note.textContent = kind === 'success'
+      ? 'Puoi chiudere questa pagina. Non devi tornare al pagamento.'
+      : kind === 'failed'
+        ? 'Se pensi di aver pagato, contattaci prima di ripetere il pagamento.'
+        : 'Non effettuare un secondo pagamento mentre è in corso la verifica.';
+  }
 
-    <p>
-      Questa scheda si chiuderà automaticamente.
-    </p>
-
-    <button id="closeButton" type="button">
-      Chiudi questa scheda
-    </button>
-
-    <a id="fallbackLink" class="button" href="/">
-      Torna ai Buoni Mortise
-    </a>
-
-    <div id="order" class="order"></div>
-  </main>
-
-  <script>
-    (function () {
-      const params =
-        new URLSearchParams(
-          window.location.search
-        );
-
-      const order =
-        String(
-          params.get('order') || ''
-        ).trim();
-
-      if (order) {
-        document
-          .getElementById('order')
-          .textContent =
-            'Ordine ' + order;
-
-        document
-          .getElementById('fallbackLink')
-          .href =
-            '/?sumup_return=' +
-            encodeURIComponent(order);
-
-        const signal = {
-          orderId: order,
-          ts: Date.now()
-        };
-
-        try {
-          window.localStorage.setItem(
-            'buoniMortiseSumUpReturn',
-            JSON.stringify(signal)
-          );
-        }
-        catch (error) {
-          // Il postMessage resta disponibile.
-        }
-
-        try {
-          if (window.opener) {
-            window.opener.postMessage(
-              {
-                type:
-                  'BUONI_MORTISE_SUMUP_RETURN',
-                orderId: order
-              },
-              window.location.origin
-            );
-
-            window.opener.focus();
-          }
-        }
-        catch (error) {
-          // Il fallback resta disponibile.
-        }
+  async function callServer(action) {
+    const controller = new AbortController();
+    const timeout = setTimeout(function () { controller.abort(); }, TIMEOUT_MS);
+    try {
+      const response = await fetch('/api/server', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: action, params: { orderId: orderId } }),
+        signal: controller.signal,
+        cache: 'no-store'
+      });
+      let payload;
+      try { payload = await response.json(); }
+      catch (error) { throw new Error('Risposta del server non valida.'); }
+      if (!response.ok || !payload || payload.success !== true) {
+        throw new Error(payload && payload.error ? payload.error : 'Errore di collegamento.');
       }
+      return payload.data;
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
 
-      function closeReturnTab() {
-        try {
-          window.close();
-        }
-        catch (error) {
-          // Mostriamo il fallback sotto.
-        }
+  function wait(ms) {
+    return new Promise(function (resolve) { setTimeout(resolve, ms); });
+  }
+
+  async function deliverOrder() {
+    if (deliveryStarted) return;
+    deliveryStarted = true;
+    try {
+      // Il completamento è già gestito e protetto da duplicati nel gestionale.
+      const result = await callServer(COMPLETE_ACTION);
+      if (result && result.success === true && result.email_sent === true) {
+        elements.extra.textContent = 'L’email con i buoni è stata inviata.';
+      } else {
+        elements.extra.textContent = 'Stiamo preparando i buoni e l’email di consegna.';
       }
+    } catch (error) {
+      // Un errore nella consegna non annulla un pagamento già confermato.
+      elements.extra.textContent = 'Il pagamento è confermato. La preparazione dei buoni è ancora in corso.';
+    }
+  }
 
-      document
-        .getElementById('closeButton')
-        .addEventListener(
-          'click',
-          closeReturnTab
-        );
+  async function verifyPayment() {
+    if (verifying || confirmed) return;
+    verifying = true;
+    show('checking', 'Verifica del pagamento',
+      'Stiamo controllando l’esito del pagamento ' + PROVIDER + '.', '', false);
+    try {
+      for (let i = 0; i < MAX_ATTEMPTS; i++) {
+        let result;
+        try {
+          result = await callServer(VERIFY_ACTION);
+        } catch (error) {
+          if (i < MAX_ATTEMPTS - 1) await wait(DELAY_MS);
+          continue;
+        }
+        if (result && result.success === true && result.paid === true) {
+          confirmed = true;
+          show('success', 'Pagamento confermato!',
+            'Grazie per aver sostenuto la nuova sede di Mortise. Riceverai un’email con i tuoi buoni all’indirizzo indicato durante l’acquisto.',
+            'Stiamo preparando i buoni e l’email di consegna.', false);
+          void deliverOrder();
+          return;
+        }
 
-      window.setTimeout(
-        closeReturnTab,
-        150
-      );
+        const status = String(result && result.provider_status || '').trim().toUpperCase();
+        const finalFailures = ['FAILED', 'EXPIRED', 'CANCELED', 'CANCELLED',
+          'DECLINED', 'REJECTED', 'PAGAMENTO_FALLITO', 'ABORTED'];
+        if (finalFailures.includes(status)) {
+          show('failed', 'Pagamento non completato',
+            'Il pagamento ' + PROVIDER + ' non risulta completato.',
+            'Per assistenza scrivi a info@angolidimondo.it indicando il numero d’ordine.', false);
+          return;
+        }
+        if (i < MAX_ATTEMPTS - 1) await wait(DELAY_MS);
+      }
+      show('checking', 'Pagamento ancora in verifica',
+        'Non abbiamo ancora ricevuto una conferma definitiva del pagamento.',
+        'Non ripetere subito il pagamento. Puoi verificare di nuovo oppure scrivere a info@angolidimondo.it.',
+        true);
+    } finally {
+      verifying = false;
+    }
+  }
 
-      window.setTimeout(
-        function () {
-          document.body.classList.add(
-            'fallback'
-          );
-        },
-        1200
-      );
-    })();
-  </script>
+  elements.retry.addEventListener('click', verifyPayment);
+  if (!orderId || !/^[A-Za-z0-9_-]{1,64}$/.test(orderId)) {
+    show('failed', 'Impossibile verificare l’ordine',
+      'Manca un riferimento valido all’ordine.',
+      'Per assistenza scrivi a info@angolidimondo.it.', false);
+    elements.details.hidden = true;
+  } else {
+    elements.details.textContent = 'Ordine ' + orderId;
+    void verifyPayment();
+  }
+})();
+</script>
 </body>
 </html>
+⋮⋮⋮⋮
